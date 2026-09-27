@@ -1,0 +1,109 @@
+// This is your Prisma schema file
+// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SubscriptionStatus {
+  FREE
+  MONTHLY
+  YEARLY
+  LIFETIME
+}
+
+enum Section {
+  READING
+  LOGICAL
+  BIOLOGY
+  CHEMISTRY
+  PHYSICS
+  MATHS
+}
+
+model User {
+  id                 String             @id @default(cuid())
+  name               String
+  email              String             @unique
+  password           String
+  subscriptionStatus SubscriptionStatus @default(FREE)
+  subscriptionEnd    DateTime?
+  stripeCustomerId   String?            @unique
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  attempts  Attempt[]
+  sessions  Session[]
+
+  @@map("users")
+}
+
+model Paper {
+  id        String   @id @default(cuid())
+  year      Int      @unique
+  title     String
+  pdfUrl    String
+  isFree    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  questions Question[]
+  sessions  Session[]
+
+  @@map("papers")
+}
+
+model Question {
+  id            String  @id @default(cuid())
+  paperId       String
+  section       Section
+  questionText  String
+  optionA       String
+  optionB       String
+  optionC       String
+  optionD       String
+  optionE       String
+  correctAnswer String  // "A", "B", "C", "D", or "E"
+  explanation   String?
+  difficulty    Int     @default(1) // 1-5
+
+  paper    Paper     @relation(fields: [paperId], references: [id])
+  attempts Attempt[]
+
+  @@map("questions")
+}
+
+model Attempt {
+  id             String   @id @default(cuid())
+  userId         String
+  questionId     String
+  selectedAnswer String
+  isCorrect      Boolean
+  timeTaken      Int      // seconds
+  createdAt      DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id])
+  question Question @relation(fields: [questionId], references: [id])
+
+  @@map("attempts")
+}
+
+model Session {
+  id             String   @id @default(cuid())
+  userId         String
+  paperId        String
+  score          Float
+  totalQuestions Int
+  timeTaken      Int      // seconds
+  mode           String   // "practice" or "exam"
+  createdAt      DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id])
+  paper Paper @relation(fields: [paperId], references: [id])
+
+  @@map("sessions")
+}
