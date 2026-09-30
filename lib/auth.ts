@@ -11,7 +11,7 @@ export const authOptions: NextAuthOptions = {
     CredentialsProvider({
       name: "credentials",
       credentials: {
-        email: { label: "Email", type: "email" },
+        email:    { label: "Email",    type: "email" },
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
@@ -31,9 +31,9 @@ export const authOptions: NextAuthOptions = {
         if (!isValidPassword) return null;
 
         return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
+          id:                 user.id,
+          email:              user.email,
+          name:               user.name,
           subscriptionStatus: user.subscriptionStatus,
         };
       },
@@ -42,14 +42,15 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.subscriptionStatus = (user as any).subscriptionStatus;
+        token.id                 = user.id;
+        token.subscriptionStatus = user.subscriptionStatus;
       }
       return token;
     },
     async session({ session, token }) {
       if (token && session.user) {
-        (session.user as any).id = token.sub as string;
-        (session.user as any).subscriptionStatus = token.subscriptionStatus;
+        session.user.id                 = token.id as string;
+        session.user.subscriptionStatus = token.subscriptionStatus as "FREE" | "MONTHLY" | "YEARLY" | "LIFETIME";
       }
       return session;
     },
