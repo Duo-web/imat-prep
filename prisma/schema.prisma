@@ -1,5 +1,8 @@
-// This is your Prisma schema file
-// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+// ============================================================
+// IMAT Prep Platform — Prisma Schema
+// Day 3: Expanded schema with DailyQuestionLimit, Topic tags,
+//        difficulty tracking, and performance-ready indexes.
+// ============================================================
 
 generator client {
   provider = "prisma-client-js"
@@ -10,6 +13,10 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────
+
 enum SubscriptionStatus {
   FREE
   MONTHLY
@@ -18,13 +25,22 @@ enum SubscriptionStatus {
 }
 
 enum Section {
-  READING
-  LOGICAL
+  READING     // Reading Skills & General Knowledge
+  LOGICAL     // Logical Reasoning & Problem Solving
   BIOLOGY
   CHEMISTRY
   PHYSICS
   MATHS
 }
+
+enum QuizMode {
+  PRACTICE    // Untimed, see explanation after each question
+  EXAM        // Timed, see results at the end
+}
+
+// ─────────────────────────────────────────
+// USER
+// ─────────────────────────────────────────
 
 model User {
   id                 String             @id @default(cuid())
@@ -32,78 +48,150 @@ model User {
   email              String             @unique
   password           String
   subscriptionStatus SubscriptionStatus @default(FREE)
-  subscriptionEnd    DateTime?
+  subscriptionEnd    DateTime?          // null = no active paid sub
   stripeCustomerId   String?            @unique
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
-  attempts  Attempt[]
-  sessions  Session[]
+  // Relations
+  attempts           Attempt[]
+  sessions           Session[]
+  dailyLimits        DailyQuestionLimit[]
 
   @@map("users")
 }
 
-model Paper {
-  id        String   @id @default(cuid())
-  year      Int      @unique
-  title     String
-  pdfUrl    String
-  isFree    Boolean  @default(true)
-  createdAt DateTime @default(now())
+// ─────────────────────────────────────────
+// DAILY QUESTION LIMIT (free tier enforcement)
+// Free users get 10 questions per calendar day.
+// One row per user per date — reset automatically
+// when a new day starts (just create a new row).
+// ─────────────────────────────────────────
 
+model DailyQuestionLimit {
+  id            String   @id @default(cuid())
+  userId        String
+  date          DateTime @db.Date   // calendar date only, no time
+  questionsUsed Int      @default(0) // how many questions answered today
+  limitReached  Boolean  @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // One record per user per day
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@map("daily_question_limits")
+}
+
+// ─────────────────────────────────────────
+// PAPER
+// ─────────────────────────────────────────
+
+model Paper {
+  id          String   @id @default(cuid())
+  year        Int      @unique
+  title       String
+  pdfUrl      String
+  isFree      Boolean  @default(true)
+  totalMarks  Int      @default(60)  // IMAT: 60 questions
+  durationMin Int      @default(100) // IMAT: 100 minutes
+  createdAt   DateTime @default(now())
+
+  // Relations
   questions Question[]
   sessions  Session[]
 
+  @@index([year])
   @@map("papers")
 }
+
+// ─────────────────────────────────────────
+// QUESTION
+// ─────────────────────────────────────────
 
 model Question {
   id            String  @id @default(cuid())
   paperId       String
   section       Section
-  questionText  String
+  questionText  String  @db.Text
   optionA       String
   optionB       String
   optionC       String
   optionD       String
   optionE       String
-  correctAnswer String  // "A", "B", "C", "D", or "E"
-  explanation   String?
-  difficulty    Int     @default(1) // 1-5
+  correctAnswer String  // "A" | "B" | "C" | "D" | "E"
+  explanation   String? @db.Text
 
+  // Metadata
+  difficulty    Int     @default(3) // 1 (easy) → 5 (very hard)
+  year          Int?    // denormalized for fast filtering by year without join
+  topic         String? // fine-grained topic e.g. "Cell Biology", "Acids & Bases"
+  source        String? // e.g. "IMAT 2024 Official"
+  isActive      Boolean @default(true) // allows soft-deleting bad questions
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
   paper    Paper     @relation(fields: [paperId], references: [id])
   attempts Attempt[]
 
+  @@index([section])
+  @@index([paperId])
+  @@index([difficulty])
+  @@index([topic])
   @@map("questions")
 }
+
+// ─────────────────────────────────────────
+// ATTEMPT  (one row per question answered)
+// ─────────────────────────────────────────
 
 model Attempt {
   id             String   @id @default(cuid())
   userId         String
   questionId     String
-  selectedAnswer String
+  selectedAnswer String   // "A" | "B" | "C" | "D" | "E"
   isCorrect      Boolean
-  timeTaken      Int      // seconds
+  timeTaken      Int      // seconds spent on this question
+  sessionId      String?  // optional: link to a full exam session
+
   createdAt      DateTime @default(now())
 
-  user     User     @relation(fields: [userId], references: [id])
+  // Relations
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   question Question @relation(fields: [questionId], references: [id])
+  session  Session? @relation(fields: [sessionId], references: [id])
 
+  @@index([userId])
+  @@index([questionId])
+  @@index([userId, createdAt])
   @@map("attempts")
 }
+
+// ─────────────────────────────────────────
+// SESSION  (one row per full quiz/exam run)
+// ─────────────────────────────────────────
 
 model Session {
   id             String   @id @default(cuid())
   userId         String
-  paperId        String
-  score          Float
+  paperId        String?  // null = custom practice session, not paper-based
+  mode           QuizMode @default(PRACTICE)
+  score          Float    // percentage 0–100
   totalQuestions Int
-  timeTaken      Int      // seconds
-  mode           String   // "practice" or "exam"
+  correctCount   Int      @default(0)
+  timeTaken      Int      // seconds for entire session
+  completed      Boolean  @default(false)
+
   createdAt      DateTime @default(now())
 
-  user  User  @relation(fields: [userId], references: [id])
-  paper Paper @relation(fields: [paperId], references: [id])
+  // Relations
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  paper    Paper?    @relation(fields: [paperId], references: [id])
+  attempts Attempt[]
 
+  @@index([userId])
+  @@index([userId, createdAt])
   @@map("sessions")
 }
