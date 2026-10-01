@@ -37,22 +37,41 @@ async function main() {
   console.log(`✅ Test user: ${testUser.email}`);
 
   // ─────────────────────────────────────────
-  // 2. UPSERT IMAT 2024 PAPER
+  // 2. UPSERT ALL IMAT PAPERS
   // ─────────────────────────────────────────
-  const paper2024 = await prisma.paper.upsert({
-    where: { year: 2024 },
-    update: {},
-    create: {
-      year: 2024,
-      title: "IMAT 2024 — Official Past Paper",
-      pdfUrl: "/papers/imat-2024.pdf",
-      isFree: true,
-      totalMarks: 60,
-      durationMin: 100,
-    },
-  });
+  const papersToSeed = [
+    { year: 2025, isFree: false },
+    { year: 2024, isFree: true },
+    { year: 2023, isFree: true },
+    { year: 2022, isFree: false }, // Not in public/papers but we can create DB record
+    { year: 2021, isFree: false },
+    { year: 2020, isFree: false },
+    { year: 2019, isFree: true },
+    { year: 2018, isFree: true },
+    { year: 2017, isFree: true },
+    { year: 2016, isFree: true },
+    { year: 2015, isFree: true },
+  ];
 
-  console.log(`✅ Paper: ${paper2024.title}`);
+  let paper2024;
+  for (const p of papersToSeed) {
+    const paper = await prisma.paper.upsert({
+      where: { year: p.year },
+      update: { isFree: p.isFree },
+      create: {
+        year: p.year,
+        title: `IMAT ${p.year} — Official Past Paper`,
+        pdfUrl: `/papers/imat-${p.year}.pdf`,
+        isFree: p.isFree,
+        totalMarks: 60,
+        durationMin: 100,
+      },
+    });
+    if (p.year === 2024) paper2024 = paper;
+    console.log(`✅ Paper: ${paper.title} (${p.isFree ? 'FREE' : 'LOCKED'})`);
+  }
+
+  if (!paper2024) throw new Error("Paper 2024 not found for seeding questions");
 
   // ─────────────────────────────────────────
   // 3. SEED QUESTIONS
