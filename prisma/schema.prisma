@@ -178,7 +178,8 @@ model Session {
   userId         String
   paperId        String?  // null = custom practice session, not paper-based
   mode           QuizMode @default(PRACTICE)
-  score          Float    // percentage 0–100
+  sectionFilter  String?  // optional section filter e.g. "BIOLOGY", "CHEMISTRY"
+  score          Float    // percentage 0–100 or IMAT score
   totalQuestions Int
   correctCount   Int      @default(0)
   timeTaken      Int      // seconds for entire session
