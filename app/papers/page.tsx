@@ -6,7 +6,7 @@ import { authOptions } from "@/lib/auth";
 export default async function PapersPage() {
   const session = await getServerSession(authOptions);
   // User is premium if they are logged in and not on the FREE tier
-  const isPremium = session?.user?.subscriptionStatus && session.user.subscriptionStatus !== "FREE";
+  const isPremium = Boolean(session?.user?.subscriptionStatus && session.user.subscriptionStatus !== "FREE");
 
   const dbPapers = await db.paper.findMany({
     orderBy: { year: "desc" },
