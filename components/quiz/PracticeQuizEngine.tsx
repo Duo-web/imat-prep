@@ -208,25 +208,29 @@ export default function PracticeQuizEngine({
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      {/* Top Header Bar */}
-      <div className="flex flex-wrap justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-200 gap-4">
-        <div className="flex items-center gap-3">
-          <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-1 rounded-md uppercase tracking-wider">
-            Practice Mode
+      {/* Top Header Bar — mobile-first, no wrapping overflow */}
+      <div className="flex items-center justify-between bg-white px-3 py-3 sm:px-4 rounded-xl shadow-sm border border-gray-200 gap-2 overflow-hidden">
+        {/* Left: mode badge + question counter */}
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="hidden sm:inline bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-1 rounded-md uppercase tracking-wider whitespace-nowrap shrink-0">
+            Practice
           </span>
-          <span className="text-sm font-semibold text-gray-700">
-            Question {currentIndex + 1} of {questions.length}
+          <span className="text-sm font-semibold text-gray-700 whitespace-nowrap">
+            Q {currentIndex + 1}
+            <span className="text-gray-400 font-normal"> / {questions.length}</span>
           </span>
         </div>
 
-        {/* Question matrix navigation drawer pill */}
-        <div className="flex items-center gap-4 text-sm font-medium text-gray-600">
-          <div className="flex items-center gap-1.5 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
-            <span>⏱️</span>
-            <span className="font-mono font-bold text-gray-800">{formatTime(timeTaken)}</span>
+        {/* Right: timer + score — always stay on one line */}
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1 bg-gray-50 px-2.5 py-1.5 rounded-lg border border-gray-200">
+            <span className="text-xs">⏱️</span>
+            <span className="font-mono text-xs font-bold text-gray-800 tabular-nums">
+              {formatTime(timeTaken)}
+            </span>
           </div>
-          <div className="bg-green-50 px-3 py-1.5 rounded-lg border border-green-200 text-green-700 font-semibold">
-            Score: {stats.correct} / {stats.answered}
+          <div className="bg-green-50 px-2.5 py-1.5 rounded-lg border border-green-200 text-green-700 text-xs font-semibold whitespace-nowrap">
+            ✓ {stats.correct}/{stats.answered}
           </div>
         </div>
       </div>

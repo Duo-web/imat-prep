@@ -2,7 +2,17 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { QuizMode, Section } from "@prisma/client";
+import { QuizMode, Section, SubscriptionStatus } from "@prisma/client";
+
+// Free tier: max 10 questions per calendar day
+const FREE_DAILY_LIMIT = 10;
+
+/** Returns midnight UTC for today as a Date (used as the DailyQuestionLimit.date key). */
+function todayUTC(): Date {
+  const d = new Date();
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+}
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
@@ -16,7 +26,7 @@ export async function POST(request: Request) {
   let paperId: string | null = null;
   let sectionFilter: string | null = null;
   let requestedLimit = 10;
-  let isJsonRequest = contentType.includes("application/json");
+  const isJsonRequest = contentType.includes("application/json");
 
   if (isJsonRequest) {
     const body = await request.json();
@@ -35,6 +45,44 @@ export async function POST(request: Request) {
     if (rawLimit) requestedLimit = parseInt(rawLimit, 10);
   }
 
+  // ─── Daily Question Limit check (Free tier only) ──────────────────────────
+  const user = await db.user.findUnique({
+    where: { id: session.user.id },
+    select: { subscriptionStatus: true },
+  });
+
+  const isFreeUser =
+    !user || user.subscriptionStatus === SubscriptionStatus.FREE;
+
+  if (isFreeUser) {
+    const today = todayUTC();
+
+    const todayRecord = await db.dailyQuestionLimit.findUnique({
+      where: { userId_date: { userId: session.user.id, date: today } },
+    });
+
+    const questionsUsedToday = todayRecord?.questionsUsed ?? 0;
+    const remaining = FREE_DAILY_LIMIT - questionsUsedToday;
+
+    if (remaining <= 0) {
+      return NextResponse.json(
+        {
+          error: "Daily question limit reached",
+          message:
+            "Free accounts get 10 questions per day. Upgrade to Premium for unlimited access.",
+          limitReached: true,
+          questionsUsed: questionsUsedToday,
+          dailyLimit: FREE_DAILY_LIMIT,
+        },
+        { status: 403 }
+      );
+    }
+
+    // Cap the requested session size to the remaining daily quota
+    requestedLimit = Math.min(requestedLimit, remaining);
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   // Count available questions based on filters
   const whereClause: any = { isActive: true };
   if (paperId) whereClause.paperId = paperId;
@@ -46,10 +94,14 @@ export async function POST(request: Request) {
 
   const totalQuestions = Math.min(
     requestedLimit || (mode === QuizMode.EXAM ? 60 : 10),
-    matchingQuestionsCount > 0 ? matchingQuestionsCount : (mode === QuizMode.EXAM ? 60 : 10)
+    matchingQuestionsCount > 0
+      ? matchingQuestionsCount
+      : mode === QuizMode.EXAM
+      ? 60
+      : 10
   );
 
-  // Create a new Session
+  // Create the session
   const quizSession = await db.session.create({
     data: {
       userId: session.user.id,
@@ -62,9 +114,43 @@ export async function POST(request: Request) {
     },
   });
 
+  // ─── Record daily usage for free users ────────────────────────────────────
+  if (isFreeUser) {
+    const today = todayUTC();
+    const newTotal = (
+      await db.dailyQuestionLimit.findUnique({
+        where: { userId_date: { userId: session.user.id, date: today } },
+        select: { questionsUsed: true },
+      })
+    )?.questionsUsed ?? 0;
+
+    const updatedUsed = newTotal + totalQuestions;
+
+    await db.dailyQuestionLimit.upsert({
+      where: { userId_date: { userId: session.user.id, date: today } },
+      update: {
+        questionsUsed: updatedUsed,
+        limitReached: updatedUsed >= FREE_DAILY_LIMIT,
+      },
+      create: {
+        userId: session.user.id,
+        date: today,
+        questionsUsed: totalQuestions,
+        limitReached: totalQuestions >= FREE_DAILY_LIMIT,
+      },
+    });
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   if (isJsonRequest) {
-    return NextResponse.json({ sessionId: quizSession.id, url: `/quiz/${quizSession.id}` });
+    return NextResponse.json({
+      sessionId: quizSession.id,
+      url: `/quiz/${quizSession.id}`,
+    });
   }
 
-  return NextResponse.redirect(new URL(`/quiz/${quizSession.id}`, request.url), 303);
+  return NextResponse.redirect(
+    new URL(`/quiz/${quizSession.id}`, request.url),
+    303
+  );
 }

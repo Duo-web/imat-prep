@@ -6,7 +6,10 @@ import { authOptions } from "@/lib/auth";
 export default async function PapersPage() {
   const session = await getServerSession(authOptions);
   // User is premium if they are logged in and not on the FREE tier
-  const isPremium = Boolean(session?.user?.subscriptionStatus && session.user.subscriptionStatus !== "FREE");
+  const isPremium = Boolean(
+    session?.user?.subscriptionStatus &&
+      session.user.subscriptionStatus !== "FREE"
+  );
 
   const dbPapers = await db.paper.findMany({
     orderBy: { year: "desc" },
@@ -20,7 +23,8 @@ export default async function PapersPage() {
           📄 IMAT Past Papers
         </h1>
         <p className="text-lg text-gray-500 max-w-xl mx-auto">
-          Download available IMAT past papers. Practice with real exam questions from 2015 to 2025.
+          Download available IMAT past papers. Practice with real exam
+          questions from 2015 to 2025.
         </p>
         <div className="mt-4 inline-flex items-center gap-2 bg-green-50 text-green-700 text-sm font-medium px-4 py-2 rounded-full border border-green-200">
           ✅ {dbPapers.length} papers available
@@ -34,9 +38,12 @@ export default async function PapersPage() {
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {dbPapers.map((paper) => (
-            <PaperCard 
-              key={paper.year} 
-              year={paper.year} 
+            <PaperCard
+              key={paper.year}
+              year={paper.year}
+              // pdfUrl comes from the DB — local dev uses /papers/imat-YYYY.pdf
+              // (served from public/), production uses a full R2 URL.
+              pdfUrl={paper.pdfUrl}
               isFree={paper.isFree}
               hasAccess={paper.isFree || isPremium}
             />
@@ -68,21 +75,37 @@ export default async function PapersPage() {
   );
 }
 
-function PaperCard({ year, isFree, hasAccess }: { year: number, isFree: boolean, hasAccess: boolean }) {
+function PaperCard({
+  year,
+  pdfUrl,
+  isFree,
+  hasAccess,
+}: {
+  year: number;
+  pdfUrl: string;
+  isFree: boolean;
+  hasAccess: boolean;
+}) {
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
       <div>
-        {/* Year badge */}
+        {/* Year + free/premium badge */}
         <div className="flex items-center justify-between mb-4">
           <span className="text-3xl font-bold text-gray-900">{year}</span>
-          <span className={`text-xs font-semibold px-3 py-1 rounded-full ${isFree ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
-            {isFree ? 'FREE' : 'PREMIUM'}
+          <span
+            className={`text-xs font-semibold px-3 py-1 rounded-full ${
+              isFree
+                ? "bg-green-100 text-green-700"
+                : "bg-orange-100 text-orange-700"
+            }`}
+          >
+            {isFree ? "FREE" : "PREMIUM"}
           </span>
         </div>
 
         <p className="text-sm text-gray-500 mb-5">
           Official IMAT {year} past paper — Biology, Chemistry, Physics, Maths,
-          Logic & General Knowledge
+          Logic &amp; General Knowledge
         </p>
       </div>
 
@@ -91,7 +114,7 @@ function PaperCard({ year, isFree, hasAccess }: { year: number, isFree: boolean,
         {hasAccess ? (
           <>
             <a
-              href={`/papers/imat-${year}.pdf`}
+              href={pdfUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="flex-1 text-center text-sm font-medium px-4 py-2 border border-gray-200 rounded-lg text-gray-600 hover:border-blue-400 hover:text-blue-600 transition"
@@ -99,7 +122,7 @@ function PaperCard({ year, isFree, hasAccess }: { year: number, isFree: boolean,
               👁 View
             </a>
             <a
-              href={`/papers/imat-${year}.pdf`}
+              href={pdfUrl}
               download={`IMAT-${year}-Past-Paper.pdf`}
               className="flex-1 text-center text-sm font-semibold px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
             >
@@ -111,7 +134,7 @@ function PaperCard({ year, isFree, hasAccess }: { year: number, isFree: boolean,
             href="/dashboard/pricing"
             className="flex-1 text-center text-sm font-semibold px-4 py-2 bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200 transition flex items-center justify-center gap-2"
           >
-            🔒 Locked
+            🔒 Locked — Upgrade to access
           </Link>
         )}
       </div>

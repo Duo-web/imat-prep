@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { QuizMode } from "@prisma/client";
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
@@ -26,7 +27,55 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
 
-    // Fetch questions for this session
+    // ─── PRACTICE MODE ────────────────────────────────────────────────────────
+    // In practice mode every question is submitted one-by-one via /api/quiz/submit,
+    // which already creates Attempt rows and increments correctCount on the session.
+    // We only need to mark the session as completed here — we must NOT re-count from
+    // the answers{} dict because that would double the correctCount.
+    if (quizSession.mode === QuizMode.PRACTICE) {
+      // Re-read the current correctCount that was accumulated by /submit calls
+      const currentSession = await db.session.findUnique({
+        where: { id: sessionId },
+        select: { correctCount: true, totalQuestions: true, attempts: { select: { isCorrect: true } } },
+      });
+
+      const correctCount = currentSession?.correctCount ?? 0;
+      const totalAnswered = currentSession?.attempts.length ?? 0;
+      const totalQuestions = currentSession?.totalQuestions ?? quizSession.totalQuestions;
+
+      // IMAT scoring: +1.5 correct, -0.4 wrong, 0 blank
+      const wrongCount = totalAnswered - correctCount;
+      const imatScore = parseFloat((correctCount * 1.5 - wrongCount * 0.4).toFixed(2));
+      const maxScore = parseFloat((totalQuestions * 1.5).toFixed(2));
+
+      const updatedSession = await db.session.update({
+        where: { id: sessionId },
+        data: {
+          completed: true,
+          score: imatScore,
+          timeTaken: timeTaken || quizSession.timeTaken,
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        sessionId: updatedSession.id,
+        score: imatScore,
+        maxScore,
+        correctCount,
+        wrongCount,
+        blankCount: totalQuestions - totalAnswered,
+        totalQuestions,
+        timeTaken,
+      });
+    }
+
+    // ─── EXAM MODE ────────────────────────────────────────────────────────────
+    // In exam mode the user sees all questions then submits everything at once.
+    // No per-question /submit calls are made, so we count from the answers{} dict
+    // and create all Attempt rows here.
+
+    // Fetch the exact question set the session was built with
     const whereClause: any = { isActive: true };
     if (quizSession.paperId) {
       whereClause.paperId = quizSession.paperId;
@@ -45,7 +94,6 @@ export async function POST(request: Request) {
     let blankCount = 0;
     const userAnswers: Record<string, { selected: string; isCorrect: boolean; correct: string }> = {};
 
-    // Process attempts
     for (const q of questions) {
       const selected = answers?.[q.id] || "";
       let isCorrect = false;
@@ -59,15 +107,13 @@ export async function POST(request: Request) {
         wrongCount++;
       }
 
-      userAnswers[q.id] = {
-        selected,
-        isCorrect,
-        correct: q.correctAnswer,
-      };
+      userAnswers[q.id] = { selected, isCorrect, correct: q.correctAnswer };
 
       if (selected) {
-        // Record or update attempt
-        const existingAttempt = quizSession.attempts.find((a) => a.questionId === q.id);
+        // In exam mode there should be no existing attempt, but guard just in case
+        const existingAttempt = quizSession.attempts.find(
+          (a) => a.questionId === q.id
+        );
         if (existingAttempt) {
           await db.attempt.update({
             where: { id: existingAttempt.id },
@@ -88,7 +134,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // IMAT Official Scoring Formula: +1.5 for correct, -0.4 for incorrect, 0 for blank
+    // IMAT Official Scoring Formula: +1.5 correct, -0.4 wrong, 0 blank
     const imatScore = parseFloat((correctCount * 1.5 - wrongCount * 0.4).toFixed(2));
     const maxScore = parseFloat((questions.length * 1.5).toFixed(2));
 
