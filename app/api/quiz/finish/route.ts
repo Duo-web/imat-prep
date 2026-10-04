@@ -79,7 +79,7 @@ export async function POST(request: Request) {
     const whereClause: any = { isActive: true };
     if (quizSession.paperId) {
       whereClause.paperId = quizSession.paperId;
-    } else if (quizSession.sectionFilter) {
+    } else if (quizSession.sectionFilter && quizSession.sectionFilter !== "ALL") {
       whereClause.section = quizSession.sectionFilter;
     }
 

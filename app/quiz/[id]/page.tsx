@@ -55,7 +55,7 @@ export default async function QuizSessionPage({
 
   if (quizSession.paperId) {
     whereClause.paperId = quizSession.paperId;
-  } else if (quizSession.sectionFilter) {
+  } else if (quizSession.sectionFilter && quizSession.sectionFilter !== "ALL") {
     whereClause.section = quizSession.sectionFilter as Section;
   }
 

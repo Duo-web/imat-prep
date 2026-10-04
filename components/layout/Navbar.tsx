@@ -110,6 +110,18 @@ export default function Navbar() {
           </Link>
         ))}
         {session?.user && (
+          <Link
+            href="/dashboard"
+            className={`text-sm font-medium whitespace-nowrap transition-colors ${
+              pathname === "/dashboard"
+                ? "text-blue-600"
+                : "text-gray-500 hover:text-blue-600"
+            }`}
+          >
+            Dashboard
+          </Link>
+        )}
+        {session?.user && (
           <button
             onClick={() => signOut({ callbackUrl: "/" })}
             className="text-sm font-medium whitespace-nowrap text-red-500 hover:text-red-600"

@@ -90,9 +90,18 @@ export default function PracticeQuizEngine({
     }));
   };
 
+  const [questionStartTime, setQuestionStartTime] = useState<number>(Date.now());
+
+  // Reset question timer on question change
+  useEffect(() => {
+    setQuestionStartTime(Date.now());
+  }, [currentIndex]);
+
   const handleSubmitCurrent = async () => {
     if (!currentAnswer || isSubmitting || currentResult) return;
     setIsSubmitting(true);
+
+    const timeSpentOnQuestion = Math.max(1, Math.round((Date.now() - questionStartTime) / 1000));
 
     try {
       const res = await fetch("/api/quiz/submit", {
@@ -102,7 +111,7 @@ export default function PracticeQuizEngine({
           sessionId,
           questionId: currentQuestion.id,
           selectedAnswer: currentAnswer,
-          timeTaken: 10,
+          timeTaken: timeSpentOnQuestion,
         }),
       });
 
