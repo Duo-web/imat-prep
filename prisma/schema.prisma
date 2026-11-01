@@ -38,6 +38,22 @@ enum QuizMode {
   EXAM        // Timed, see results at the end
 }
 
+// How a purchase reached us. MANUAL is the only provider confirmed today:
+// BINANCE / PAYONEER adapters land once those accounts exist and can be tested.
+enum PurchaseProvider {
+  MANUAL
+  BINANCE
+  PAYONEER
+  CODE       // granted by redeeming an access code
+}
+
+enum PurchaseStatus {
+  PENDING
+  PAID
+  REFUNDED
+  CANCELLED
+}
+
 // ─────────────────────────────────────────
 // USER
 // ─────────────────────────────────────────
@@ -48,8 +64,9 @@ model User {
   email              String             @unique
   password           String
   subscriptionStatus SubscriptionStatus @default(FREE)
-  subscriptionEnd    DateTime?          // null = no active paid sub
+  subscriptionEnd    DateTime?          // null = no active paid period (LIFETIME also null)
   stripeCustomerId   String?            @unique
+  partnerCode        String?            // who introduced this student, captured at signup
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
@@ -57,6 +74,7 @@ model User {
   attempts           Attempt[]
   sessions           Session[]
   dailyLimits        DailyQuestionLimit[]
+  purchases          Purchase[]
 
   @@map("users")
 }
@@ -81,6 +99,67 @@ model DailyQuestionLimit {
   @@unique([userId, date])
   @@index([userId, date])
   @@map("daily_question_limits")
+}
+
+// ─────────────────────────────────────────
+// ACCESS CODE
+// A code is how money that arrived outside the app — a Binance payment, a
+// Payoneer transfer, a WhatsApp deal, a partner's bulk classroom licence —
+// turns into entitlement. One code can serve many seats.
+// ─────────────────────────────────────────
+
+model AccessCode {
+  id             String             @id @default(cuid())
+  code           String             @unique
+  plan           SubscriptionStatus
+  durationDays   Int?               // null = lifetime
+  maxRedemptions Int                @default(1)
+  redeemedCount  Int                @default(0)
+  partnerCode    String?            // revenue share is attributed here
+  note           String?
+  revoked        Boolean            @default(false)
+  expiresAt      DateTime?          // last day the code itself can be redeemed
+  createdAt      DateTime           @default(now())
+
+  purchases Purchase[]
+
+  @@index([partnerCode])
+  @@map("access_codes")
+}
+
+// ─────────────────────────────────────────
+// PURCHASE  (the money ledger — append, don't edit)
+// users.subscriptionStatus is the *effective* entitlement; this is the record
+// of why. Every grant writes both in one transaction; a refund revokes both.
+// ─────────────────────────────────────────
+
+model Purchase {
+  id           String           @id @default(cuid())
+  userId       String?
+  plan         SubscriptionStatus
+  provider     PurchaseProvider @default(MANUAL)
+  status       PurchaseStatus   @default(PENDING)
+  amount       Decimal          @db.Decimal(10, 2)
+  currency     String           @default("EUR")
+  externalRef  String?          @unique // payment reference, or code if granted manually
+  accessCodeId String?
+  partnerCode  String?
+  grantedAt    DateTime?
+  expiresAt    DateTime?        // null = lifetime
+  refundedAt   DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  user       User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  accessCode AccessCode? @relation(fields: [accessCodeId], references: [id])
+
+  // Stops one code being redeemed twice by the same student.
+  // Postgres permits unlimited NULLs in a unique index, so non-code purchases are unaffected.
+  @@unique([accessCodeId, userId])
+  @@index([userId, status])
+  @@index([partnerCode])
+  @@index([status, createdAt])
+  @@map("purchases")
 }
 
 // ─────────────────────────────────────────

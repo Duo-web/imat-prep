@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { QuizMode, Section, SubscriptionStatus } from "@prisma/client";
+import { QuizMode, Section } from "@prisma/client";
+import { getAccess } from "@/lib/entitlement";
 
 // Free tier: max 10 questions per calendar day
 const FREE_DAILY_LIMIT = 10;
@@ -46,13 +47,9 @@ export async function POST(request: Request) {
   }
 
   // ─── Daily Question Limit check (Free tier only) ──────────────────────────
-  const user = await db.user.findUnique({
-    where: { id: session.user.id },
-    select: { subscriptionStatus: true },
-  });
-
-  const isFreeUser =
-    !user || user.subscriptionStatus === SubscriptionStatus.FREE;
+  // Access is read from the database, not the session token, so a student who paid
+  // five minutes ago is not still counted against the free allowance.
+  const isFreeUser = (await getAccess(session.user.id)) === null;
 
   if (isFreeUser) {
     const today = todayUTC();
