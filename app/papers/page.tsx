@@ -2,14 +2,13 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { hasAccess } from "@/lib/entitlement";
 
 export default async function PapersPage() {
   const session = await getServerSession(authOptions);
-  // User is premium if they are logged in and not on the FREE tier
-  const isPremium = Boolean(
-    session?.user?.subscriptionStatus &&
-      session.user.subscriptionStatus !== "FREE"
-  );
+  // Read from the database, not the sign-in token: paid access must work the moment
+  // it is granted, and locked papers must lock again the moment it lapses.
+  const isPremium = session?.user?.id ? await hasAccess(session.user.id) : false;
 
   const dbPapers = await db.paper.findMany({
     orderBy: { year: "desc" },
@@ -63,7 +62,7 @@ export default async function PapersPage() {
               performance analytics — starting at just €12/month.
             </p>
             <Link
-              href="/dashboard/pricing"
+              href="/pricing"
               className="inline-block px-8 py-3 bg-white text-blue-600 rounded-lg font-semibold hover:bg-blue-50 transition"
             >
               Upgrade Now
@@ -131,7 +130,7 @@ function PaperCard({
           </>
         ) : (
           <Link
-            href="/dashboard/pricing"
+            href="/pricing"
             className="flex-1 text-center text-sm font-semibold px-4 py-2 bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200 transition flex items-center justify-center gap-2"
           >
             🔒 Locked — Upgrade to access

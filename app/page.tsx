@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function Home() {
   return (
     <main className="min-h-screen bg-white dark:bg-gray-950">
@@ -26,13 +28,12 @@ export default function Home() {
           </a>
         </div>
 
-        {/* Pricing Teaser */}
-        <div className="mt-16 grid grid-cols-2 sm:grid-cols-4 gap-6 max-w-3xl w-full">
+        {/* Pricing Teaser — descriptions must match what /pricing and the code deliver */}
+        <div className="mt-16 grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-3xl w-full">
           {[
-            { plan: "Free", price: "€0", desc: "Past papers + 10 questions/day" },
-            { plan: "Monthly", price: "€12/mo", desc: "Unlimited questions + simulators" },
-            { plan: "Yearly", price: "€79/yr", desc: "Everything + study planner" },
-            { plan: "Lifetime", price: "€149", desc: "Everything forever" },
+            { plan: "Free", price: "€0", desc: "Past papers + 10 questions a day" },
+            { plan: "Season pass", price: "€79", desc: "Unlimited questions + full simulators" },
+            { plan: "Lifetime", price: "€149", desc: "The same, every season after" },
           ].map((item) => (
             <div
               key={item.plan}
@@ -50,6 +51,12 @@ export default function Home() {
             </div>
           ))}
         </div>
+
+        <p className="mt-6 text-sm text-gray-400">
+          <Link href="/pricing" className="font-medium text-blue-600 hover:underline">
+            What's included, and how to pay →
+          </Link>
+        </p>
 
         <p className="mt-6 text-sm text-gray-400">
           vs. IMAT Buddy at €279/year — no monthly option, no free trial
