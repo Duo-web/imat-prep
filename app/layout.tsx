@@ -4,7 +4,7 @@ import "./globals.css";
 import Navbar from "@/components/layout/Navbar";
 import Providers from "@/components/Providers";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ subsets: ["latin"], display: "swap" });
 
 export const metadata: Metadata = {
   title: "IMAT Prep — Smarter, Cheaper IMAT Preparation",

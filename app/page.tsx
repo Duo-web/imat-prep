@@ -14,18 +14,18 @@ export default function Home() {
           place.
         </p>
         <div className="flex flex-col sm:flex-row gap-4">
-          <a
+          <Link
             href="/papers"
             className="px-8 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition"
           >
             Free Past Papers
-          </a>
-          <a
+          </Link>
+          <Link
             href="/register"
             className="px-8 py-3 border-2 border-blue-600 text-blue-600 rounded-lg font-semibold hover:bg-blue-50 transition"
           >
             Start Free — No Card Needed
-          </a>
+          </Link>
         </div>
 
         {/* Pricing Teaser — descriptions must match what /pricing and the code deliver */}
